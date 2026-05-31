@@ -1,0 +1,6 @@
+{
+  "name": "Hedjo - Carbon Accounting SaaS",
+  "description": "Hedjo is a green climate-tech SaaS that helps organizations measure, report, and reduce their Scope 1, Scope 2, and Scope 3 greenhouse gas emissions, featuring AI-powered sustainability recommendations driven by Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

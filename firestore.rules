@@ -1,0 +1,209 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Default Catch-All Deny Block (Global Safety Net)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardening Reusable Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role-Based relational checks retrieving context with get() and exists()
+    function hasMembership(orgId) {
+      return isVerified() && exists(/databases/$(database)/documents/organizations/$(orgId)/memberships/$(request.auth.uid));
+    }
+
+    function getMembership(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/memberships/$(request.auth.uid)).data;
+    }
+
+    function isAdmin(orgId) {
+      return hasMembership(orgId) && getMembership(orgId).role == 'admin';
+    }
+
+    function isContributor(orgId) {
+      return hasMembership(orgId) && (
+        getMembership(orgId).role == 'admin' ||
+        getMembership(orgId).role == 'contributor'
+      );
+    }
+
+    function isPeriodDraft(orgId, periodId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/reportingPeriods/$(periodId)).data.status == 'draft';
+    }
+
+    // --- Core Match Rules for Collections ---
+
+    // A. Organizations Collection
+    match /organizations/{orgId} {
+      allow get: if hasMembership(orgId);
+      allow list: if isVerified() && resource.data.ownerUserId == request.auth.uid;
+
+      allow create: if isVerified() &&
+        isValidId(orgId) &&
+        incoming().id == orgId &&
+        incoming().ownerUserId == request.auth.uid &&
+        incoming().createdAt is string && incoming().createdAt.size() <= 50 &&
+        incoming().name is string && incoming().name.size() <= 200 &&
+        incoming().country is string && incoming().country.size() <= 100 &&
+        incoming().industry is string && incoming().industry.size() <= 100 &&
+        incoming().baseCurrency is string && incoming().baseCurrency.size() <= 10 &&
+        incoming().baselineYear is int &&
+        // Securely binds a member to the organization atomically inside the same batch
+        existsAfter(/databases/$(database)/documents/organizations/$(orgId)/memberships/$(request.auth.uid));
+
+      allow update: if isVerified() &&
+        isAdmin(orgId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUserId == existing().ownerUserId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().name is string && incoming().name.size() <= 200 &&
+        incoming().country is string && incoming().country.size() <= 100 &&
+        incoming().industry is string && incoming().industry.size() <= 100 &&
+        incoming().baseCurrency is string && incoming().baseCurrency.size() <= 10 &&
+        incoming().baselineYear is int &&
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'country', 'industry', 'baseCurrency', 'baselineYear']);
+
+      allow delete: if false; // System retention constraint
+
+      // B. Memberships Subcollection (Hierarchical RBAC mapping)
+      match /memberships/{membershipId} {
+        allow read: if hasMembership(orgId);
+
+        allow create: if isVerified() &&
+          isValidId(membershipId) &&
+          membershipId == incoming().userId && // Standard practice binding user profile context
+          incoming().id == membershipId &&
+          incoming().orgId == orgId &&
+          incoming().userId is string && incoming().userId.size() <= 128 &&
+          (
+            // Creating baseline admin linked to organization creation synchronously
+            (incoming().role == 'admin' && existsAfter(/databases/$(database)/documents/organizations/$(orgId))) ||
+            // Or authorized Admin inviting other verified users
+            (isAdmin(orgId) && incoming().role in ['admin', 'contributor', 'viewer'] && exists(/databases/$(database)/documents/organizations/$(orgId)))
+          );
+
+        allow update: if isVerified() &&
+          isAdmin(orgId) &&
+          incoming().id == existing().id &&
+          incoming().orgId == existing().orgId &&
+          incoming().userId == existing().userId &&
+          incoming().role in ['admin', 'contributor', 'viewer'] &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['role']);
+
+        allow delete: if isVerified() &&
+          isAdmin(orgId) &&
+          membershipId != request.auth.uid; // Prevent locking oneself out of company workspace
+      }
+
+      // C. Reporting Periods Subcollection (Filing Buckets)
+      match /reportingPeriods/{periodId} {
+        allow read: if hasMembership(orgId);
+
+        allow create: if isVerified() &&
+          isValidId(periodId) &&
+          isAdmin(orgId) &&
+          incoming().id == periodId &&
+          incoming().orgId == orgId &&
+          incoming().year is int &&
+          incoming().status == 'draft' &&
+          incoming().createdAt is string && incoming().createdAt.size() <= 50;
+
+        allow update: if isVerified() &&
+          isAdmin(orgId) &&
+          incoming().id == existing().id &&
+          incoming().orgId == existing().orgId &&
+          incoming().year == existing().year &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().status in ['draft', 'locked'] &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lockedAt']);
+
+        allow delete: if false; // Regulatory retention requirements
+
+        // D. Activity Data Subcollection (Climate ledger items)
+        match /activities/{activityId} {
+          allow read: if hasMembership(orgId);
+
+          allow create: if isVerified() &&
+            isValidId(activityId) &&
+            isContributor(orgId) &&
+            isPeriodDraft(orgId, periodId) &&
+            incoming().id == activityId &&
+            incoming().orgId == orgId &&
+            incoming().reportingPeriodId == periodId &&
+            incoming().scope in [1, 2, 3] &&
+            incoming().categoryId is string && incoming().categoryId.size() <= 100 &&
+            incoming().location is string && incoming().location.size() <= 200 &&
+            incoming().activityAmount is number &&
+            incoming().activityUnit is string && incoming().activityUnit.size() <= 50 &&
+            incoming().emissionFactorId is string && incoming().emissionFactorId.size() <= 100 &&
+            incoming().calculatedCO2e is number &&
+            incoming().notes is string && incoming().notes.size() <= 1000 &&
+            incoming().createdBy == request.auth.uid &&
+            incoming().createdAt is string && incoming().createdAt.size() <= 50 &&
+            incoming().date is string && incoming().date.size() <= 10;
+
+          allow update: if isVerified() &&
+            isContributor(orgId) &&
+            isPeriodDraft(orgId, periodId) &&
+            incoming().id == existing().id &&
+            incoming().orgId == existing().orgId &&
+            incoming().reportingPeriodId == existing().reportingPeriodId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().createdBy == existing().createdBy &&
+            incoming().scope in [1, 2, 3] &&
+            incoming().categoryId is string && incoming().categoryId.size() <= 100 &&
+            incoming().location is string && incoming().location.size() <= 200 &&
+            incoming().activityAmount is number &&
+            incoming().activityUnit is string && incoming().activityUnit.size() <= 50 &&
+            incoming().emissionFactorId is string && incoming().emissionFactorId.size() <= 100 &&
+            incoming().calculatedCO2e is number &&
+            incoming().notes is string && incoming().notes.size() <= 1000 &&
+            incoming().date is string && incoming().date.size() <= 10 &&
+            incoming().diff(existing()).affectedKeys().hasAny(['location', 'activityAmount', 'activityUnit', 'emissionFactorId', 'calculatedCO2e', 'notes', 'date', 'categoryId', 'scope']);
+
+          allow delete: if isVerified() &&
+            isContributor(orgId) &&
+            isPeriodDraft(orgId, periodId);
+        }
+
+        // E. AI Insights Subcollection (System generated audits)
+        match /insights/{insightId} {
+          allow read: if hasMembership(orgId);
+
+          allow create: if isVerified() &&
+            isValidId(insightId) &&
+            isContributor(orgId) &&
+            incoming().id == insightId &&
+            incoming().orgId == orgId &&
+            incoming().reportingPeriodId == periodId &&
+            incoming().summaryText is string && incoming().summaryText.size() <= 50000 &&
+            incoming().createdAt is string && incoming().createdAt.size() <= 50 &&
+            incoming().modelName is string && incoming().modelName.size() <= 100;
+
+          allow update, delete: if false; // System-generated immutable records
+        }
+      }
+    }
+  }
+}

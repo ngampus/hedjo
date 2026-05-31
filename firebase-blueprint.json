@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "A tenant organization utilizing Hedjo carbon accounting platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the organization" },
+        "name": { "type": "string", "description": "Legal business name" },
+        "country": { "type": "string", "description": "Indonesia or international territory of operation" },
+        "industry": { "type": "string", "description": "SME sector vertical classification" },
+        "baseCurrency": { "type": "string", "description": "Standard business currency e.g. IDR or USD" },
+        "baselineYear": { "type": "integer", "description": "Baseline comparative emissions fiscal year" },
+        "ownerUserId": { "type": "string", "description": "User UID who originally provisioned the company workspace" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "name", "country", "industry", "baseCurrency", "baselineYear", "ownerUserId", "createdAt"]
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Access control map establishing a specific role relationship between a user and a tenant organization.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique membership relationship ID" },
+        "orgId": { "type": "string", "description": "Target organization's reference ID" },
+        "userId": { "type": "string", "description": "Authorized user's Firebase Authentication UID" },
+        "role": { "type": "string", "enum": ["admin", "contributor", "viewer"], "description": "RBAC clearance tier" },
+        "userEmail": { "type": "string", "description": "Linked company email address" }
+      },
+      "required": ["id", "orgId", "userId", "role"]
+    },
+    "ReportingPeriod": {
+      "title": "ReportingPeriod",
+      "description": "Filing period partition representing a corporate fiscal year.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Partition reference ID" },
+        "orgId": { "type": "string", "description": "Target organization's reference ID" },
+        "year": { "type": "integer", "description": "Reporting calendar year" },
+        "status": { "type": "string", "enum": ["draft", "locked"], "description": "Period editing restriction lock" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "lockedAt": { "type": "string", "format": "date-time", "description": "Timestamp indicating when period status was finalized if locked" }
+      },
+      "required": ["id", "orgId", "year", "status", "createdAt"]
+    },
+    "ActivityData": {
+      "title": "ActivityData",
+      "description": "An environmental event causing Greenhouse Gas emission inputs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Activity transaction reference ID" },
+        "orgId": { "type": "string", "description": "Target organization's reference ID" },
+        "reportingPeriodId": { "type": "string", "description": "Reference ID for the reporting filing period" },
+        "scope": { "type": "integer", "enum": [1, 2, 3], "description": "GHG protocol scope level" },
+        "categoryId": { "type": "string", "description": "Classification category key e.g. electricity, stationary combustions" },
+        "location": { "type": "string", "description": "Business site or facility identifier" },
+        "activityAmount": { "type": "number", "description": "Physical amount consumed" },
+        "activityUnit": { "type": "string", "description": "SI or standard consumption metric units" },
+        "emissionFactorId": { "type": "string", "description": "Conversion emission factor model UID" },
+        "calculatedCO2e": { "type": "number", "description": "Tons of Carbon Dioxide equivalent calculated outcome (tCO2e)" },
+        "notes": { "type": "string", "description": "Audit trails or transaction descriptions" },
+        "createdBy": { "type": "string", "description": "Operator user UID who logged the transaction" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "date": { "type": "string", "description": "Input month period YYYY-MM" }
+      },
+      "required": ["id", "orgId", "reportingPeriodId", "scope", "categoryId", "location", "activityAmount", "activityUnit", "emissionFactorId", "calculatedCO2e", "createdBy", "createdAt", "date"]
+    },
+    "AIInsight": {
+      "title": "AIInsight",
+      "description": "ESG advisory report compiled by Gemini to suggest low-carbon transition reductions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Analysis document UID" },
+        "orgId": { "type": "string", "description": "Target organization's reference ID" },
+        "reportingPeriodId": { "type": "string", "description": "Reference ID for the reporting filing period" },
+        "summaryText": { "type": "string", "description": "Markdown formatted summary and suggestions recommendations" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "modelName": { "type": "string", "description": "Model identifier e.g. gemini-2.5-flash" }
+      },
+      "required": ["id", "orgId", "reportingPeriodId", "summaryText", "createdAt", "modelName"]
+    }
+  },
+  "firestore": {
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Tenant profile"
+    },
+    "/organizations/{orgId}/memberships/{membershipId}": {
+      "schema": "Membership",
+      "description": "Associated access memberships to evaluate client authorizations"
+    },
+    "/organizations/{orgId}/reportingPeriods/{periodId}": {
+      "schema": "ReportingPeriod",
+      "description": "Temporal filing brackets per organization tenant"
+    },
+    "/organizations/{orgId}/reportingPeriods/{periodId}/activities/{activityId}": {
+      "schema": "ActivityData",
+      "description": "Environmental activity transactional log entries"
+    },
+    "/organizations/{orgId}/reportingPeriods/{periodId}/insights/{insightId}": {
+      "schema": "AIInsight",
+      "description": "AI climate performance evaluation summaries stored inside firestore"
+    }
+  }
+}
