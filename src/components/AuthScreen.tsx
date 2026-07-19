@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { Leaf, Mail, Lock, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
-import { isLocalStorageFallback, auth } from '../firebase';
+import { isLocalStorageFallback, isD1Mode, auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { d1Login, d1Register } from '../utils/cloudService';
 
 interface AuthScreenProps {
   onAuthSuccess: (userId: string, email: string, isDemo: boolean) => void;
@@ -29,9 +30,43 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
       return;
     }
     setError(null);
-    setIsProviderDisabledError(false);
-    setCountdown(null);
     setLoading(true);
+
+    // D1 mode: use Worker API auth (real database)
+    if (isD1Mode) {
+      try {
+        if (isRegister) {
+          const cred = await d1Register(email, password);
+          setLoading(false);
+          onAuthSuccess(cred.userId, cred.email, false);
+        } else {
+          try {
+            const cred = await d1Login(email, password);
+            setLoading(false);
+            onAuthSuccess(cred.userId, cred.email, false);
+          } catch (innerErr: any) {
+            // Auto-register on login if user not found (trial provisioning)
+            if (innerErr.message?.includes('Invalid credentials') || innerErr.message?.includes('401')) {
+              try {
+                const cred = await d1Register(email, password);
+                setLoading(false);
+                onAuthSuccess(cred.userId, cred.email, false);
+              } catch (regErr: any) {
+                setError(regErr.message || 'Registration failed');
+                setLoading(false);
+              }
+            } else {
+              setError(innerErr.message || 'Login failed');
+              setLoading(false);
+            }
+          }
+        }
+      } catch (err: any) {
+        setError(err.message || 'Authentication failed');
+        setLoading(false);
+      }
+      return;
+    }
 
     if (!isLocalStorageFallback && auth) {
       try {
@@ -155,7 +190,7 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         </div>
 
         {/* Fallback Warning Flag */}
-        {isLocalStorageFallback && (
+        {isLocalStorageFallback && !isD1Mode && (
           <div className="bg-emerald-50 border border-emerald-100 text-emerald-950 p-4 rounded-xl text-xs flex gap-3 leading-relaxed">
             <Sparkles className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5 animate-bounce" />
             <div>

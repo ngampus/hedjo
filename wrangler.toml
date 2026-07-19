@@ -14,3 +14,10 @@ not_found_handling = "single-page-application"
 # OpenRouter AI config (API key stored as Worker secret)
 [vars]
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+BACKEND_MODE = "d1"
+
+# D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "hedjo-db"
+database_id = "6f329e0f-5cb4-43d1-b623-adaaad5a8b73"

@@ -49,7 +49,7 @@ import {
   updateActivityInFirestore, 
   deleteActivityFromFirestore 
 } from './utils/firebaseService';
-import { testConnection } from './firebase';
+import { testConnection, isD1Mode } from './firebase';
 
 export default function App() {
   // Navigation states
@@ -66,6 +66,25 @@ export default function App() {
   useEffect(() => {
     if (isFirebaseEnabled()) {
       testConnection();
+    }
+    // D1 mode: check session from cookie via API
+    if (isD1Mode) {
+      fetch('/api/auth/me', { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.user) {
+            setUser({ id: data.user.id, email: data.user.email });
+            getOrganizationsForUser(data.user.id).then((orgs) => {
+              if (orgs.length > 0) {
+                setOrganization(orgs[0]);
+                getReportingPeriodsForOrg(orgs[0].id).then((periods) => {
+                  if (periods.length > 0) setPeriod(periods[0]);
+                });
+              }
+            });
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -128,7 +147,11 @@ export default function App() {
   // Fetch activities dynamic responses whenever organization & period changes
   useEffect(() => {
     if (organization && period) {
-      if (isFirebaseEnabled() && organization.id !== 'hedjo_demo_corp') {
+      if (isD1Mode && organization.id !== 'hedjo_demo_corp') {
+        getActivitiesForPeriod(organization.id, period.id).then((actList) => {
+          setActivities(actList);
+        }).catch(() => setActivities([]));
+      } else if (isFirebaseEnabled() && organization.id !== 'hedjo_demo_corp') {
         getActivitiesForPeriod(organization.id, period.id).then((actList) => {
           setActivities(actList);
         }).catch(err => {

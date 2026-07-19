@@ -8,16 +8,18 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
-// Detect if the firebase-applet-config is still set to placeholder values
-// On Cloudflare Workers edge, we force LocalStorage fallback mode to avoid
-// Firebase domain authorization errors (original config is bound to Cloud Run URL).
-export const isLocalStorageFallback = true;
+// Cloudflare Workers edge mode uses D1 (real database) instead of Firebase.
+// Firebase domain authorization errors are avoided by not initializing Firebase.
+export const isLocalStorageFallback = false;
+export const isD1Mode = true;
 
 let app;
 let dbInstance: any = null;
 let authInstance: any = null;
 
-if (!isLocalStorageFallback) {
+// In D1 mode (Cloudflare Workers edge), we skip Firebase entirely.
+// The app uses cloudService.ts (D1-backed API) instead.
+if (!isLocalStorageFallback && !isD1Mode) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     dbInstance = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
