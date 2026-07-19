@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, Printer, Copy, Check, RotateCcw, HelpCircle, Leaf, AlertCircle } from 'lucide-react';
 import { ActivityData, Scope, AIInsight } from '../types';
 import { isFirebaseEnabled, getInsightsForPeriod, saveInsightToFirestore } from '../utils/firebaseService';
+import { isD1Mode } from '../firebase';
 
 interface InsightsViewProps {
   orgId?: string;
@@ -48,7 +49,7 @@ export default function InsightsView({
   // Retrieve cached insights from localStorage/Firestore if available, or trigger automatic load
   useEffect(() => {
     async function loadCache() {
-      if (isFirebaseEnabled() && orgId && reportingPeriodId) {
+      if ((isD1Mode || isFirebaseEnabled()) && orgId && reportingPeriodId) {
         try {
           const list = await getInsightsForPeriod(orgId, reportingPeriodId);
           if (list.length > 0) {
@@ -56,7 +57,7 @@ export default function InsightsView({
             return;
           }
         } catch (err) {
-          console.warn("Error loading cached insights from Firestore:", err);
+          console.warn("Error loading cached insights:", err);
         }
       }
 
@@ -103,18 +104,18 @@ export default function InsightsView({
       const cachedKey = `hedjo_insights_${orgName}_${year}`;
       localStorage.setItem(cachedKey, resJson.summaryText);
 
-      // Save to Firestore cloud cache if enabled
-      if (isFirebaseEnabled() && orgId && reportingPeriodId) {
+      // Save to cloud cache if enabled
+      if ((isD1Mode || isFirebaseEnabled()) && orgId && reportingPeriodId) {
         const insightDoc: AIInsight = {
           id: 'insight_' + Math.random().toString(36).substring(4, 9),
           orgId,
           reportingPeriodId,
           summaryText: resJson.summaryText,
           createdAt: new Date().toISOString(),
-          modelName: 'gemini-2.5-flash'
+          modelName: 'tencent/hy3:free (OpenRouter)'
         };
         saveInsightToFirestore(insightDoc).catch(err => {
-          console.warn("Could not save climate report cache to Firestore:", err);
+          console.warn("Could not save climate report cache:", err);
         });
       }
 

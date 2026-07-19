@@ -202,7 +202,14 @@ export default function App() {
 
   // Onboarding wizard completion handler
   const handleOnboardingComplete = async (newOrg: Organization, newPeriod: ReportingPeriod) => {
-    if (isFirebaseEnabled() && user && user.id !== 'demo_user_id') {
+    if (isD1Mode && user && user.id !== 'demo_user_id') {
+      try {
+        await saveOrganizationToFirestore(newOrg, user.email);
+        await saveReportingPeriodToFirestore(newPeriod);
+      } catch (err) {
+        console.error("Failed onboarding profile sync in D1 database:", err);
+      }
+    } else if (isFirebaseEnabled() && user && user.id !== 'demo_user_id') {
       try {
         await saveOrganizationToFirestore(newOrg, user.email);
         await saveReportingPeriodToFirestore(newPeriod);
@@ -222,7 +229,13 @@ export default function App() {
   };
 
   const handleUpdateOrganization = async (updatedOrg: Organization) => {
-    if (isFirebaseEnabled() && user && user.id !== 'demo_user_id') {
+    if (isD1Mode && user && user.id !== 'demo_user_id') {
+      try {
+        await updateOrganizationInFirestore(updatedOrg);
+      } catch (err) {
+        console.error("Failed updating organization details in D1:", err);
+      }
+    } else if (isFirebaseEnabled() && user && user.id !== 'demo_user_id') {
       try {
         await updateOrganizationInFirestore(updatedOrg);
       } catch (err) {
@@ -266,7 +279,15 @@ export default function App() {
       createdBy: user?.id || 'anonymous'
     };
 
-    if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp') {
+    if (isD1Mode && organization && organization.id !== 'hedjo_demo_corp') {
+      try {
+        await addActivityToFirestore(completeActivity);
+        setActivities([completeActivity, ...activities]);
+      } catch (err: any) {
+        console.error("Error adding activity to D1:", err);
+        alert("Failed to add activity. Please try again.");
+      }
+    } else if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp') {
       try {
         await addActivityToFirestore(completeActivity);
         setActivities([completeActivity, ...activities]);
@@ -295,7 +316,15 @@ export default function App() {
       ...updatedFields
     };
 
-    if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp') {
+    if (isD1Mode && organization && organization.id !== 'hedjo_demo_corp') {
+      try {
+        await updateActivityInFirestore(completeUpdated);
+        setActivities(activities.map((act) => act.id === actId ? completeUpdated : act));
+      } catch (err: any) {
+        console.error("Error updating activity in D1:", err);
+        alert("Failed to update activity. Please try again.");
+      }
+    } else if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp') {
       try {
         await updateActivityInFirestore(completeUpdated);
         setActivities(activities.map((act) => act.id === actId ? completeUpdated : act));
@@ -322,7 +351,15 @@ export default function App() {
   };
 
   const handleDeleteActivity = async (actId: string) => {
-    if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp' && period) {
+    if (isD1Mode && organization && organization.id !== 'hedjo_demo_corp' && period) {
+      try {
+        await deleteActivityFromFirestore(organization.id, period.id, actId);
+        setActivities(activities.filter((act) => act.id !== actId));
+      } catch (err: any) {
+        console.error("Error deleting activity from D1:", err);
+        alert("Failed to delete activity. Please try again.");
+      }
+    } else if (isFirebaseEnabled() && organization && organization.id !== 'hedjo_demo_corp' && period) {
       try {
         await deleteActivityFromFirestore(organization.id, period.id, actId);
         setActivities(activities.filter((act) => act.id !== actId));
@@ -353,7 +390,16 @@ export default function App() {
       lockedAt: nextStatus === 'locked' ? new Date().toISOString() : null
     };
 
-    if (isFirebaseEnabled() && organization.id !== 'hedjo_demo_corp') {
+    if (isD1Mode && organization.id !== 'hedjo_demo_corp') {
+      try {
+        await saveReportingPeriodToFirestore(updatedPeriod);
+        setPeriod(updatedPeriod);
+        localStorage.setItem('hedjo_session_period', JSON.stringify(updatedPeriod));
+      } catch (err: any) {
+        console.error("Error changing filing status in D1:", err);
+        alert("Failed to toggle period status. Please try again.");
+      }
+    } else if (isFirebaseEnabled() && organization.id !== 'hedjo_demo_corp') {
       try {
         await saveReportingPeriodToFirestore(updatedPeriod);
         setPeriod(updatedPeriod);
