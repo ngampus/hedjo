@@ -298,7 +298,101 @@ async function createInsight(request: Request, env: Env): Promise<Response> {
 	});
 }
 
-// ─── Router ───────────────────────────────────────────────────────
+// ─── Carbon Rating Estimate ──────────────────────────────────────
+
+async function generateEstimate(body: any, env: Env): Promise<any> {
+	const apiKey = env.OPENROUTER_API_KEY;
+	const baseUrl = env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
+
+	if (!apiKey) {
+		return legacyEstimate(body);
+	}
+
+	const prompt = `You are a carbon efficiency rating auditor specializing in Southeast Asian enterprises (Indonesia, Singapore, ASEAN).
+
+Estimate the carbon efficiency rating and footprint range for this organization based on its industry profile and website:
+
+### ORGANIZATION
+- Name: "${body.name || 'Unknown Corp'}"
+- Industry: ${body.industry || 'General SME'}
+- Country: ${body.country || 'Indonesia'}
+- Website: ${body.websiteUrl || 'Not provided'}
+
+Analyze the industry sector, typical energy intensity, direct combustion profile, and supply chain characteristics for this type of business in Southeast Asia. Consider:
+- Tech/SaaS: low direct combustion, high Scope 2 (data centers), efficient ratings
+- Logistics/Freight: heavy diesel fleets, high Scope 1+3, poor ratings
+- Manufacturing: process heating, steam, industrial electricity
+- Hospitality/Food: refrigeration leaks, food supply chain
+
+Return a JSON object with exactly these fields:
+{
+  "rating": "letter grade A+ to F (e.g. A, A-, B+, B, C, D, F)",
+  "footprintRange": "realistic annual range like '8 - 20 tCO2e/yr'",
+  "explanation": "2-3 sentence professional ESG reasoning specific to this industry and region"
+}`;
+
+	try {
+		const resp = await fetch(baseUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${apiKey}`,
+				'HTTP-Referer': 'https://hedjo.letssee.my.id',
+				'X-Title': 'Hedjo Carbon Accounting',
+			},
+			body: JSON.stringify({
+				model: 'tencent/hy3:free',
+				messages: [
+					{
+						role: 'system',
+						content: 'You are Hedjo AI, a carbon efficiency rating auditor for Southeast Asian SMEs. Always respond with valid JSON only.',
+					},
+					{ role: 'user', content: prompt },
+				],
+				temperature: 0.3,
+			}),
+		});
+
+		if (!resp.ok) return legacyEstimate(body);
+		const data = (await resp.json()) as any;
+		const content = data.choices?.[0]?.message?.content || '';
+		try {
+			// Extract JSON from potential markdown code fences
+			const jsonMatch = content.match(/\{[\s\S]*\}/);
+			const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+			return {
+				rating: parsed.rating || 'B',
+				footprintRange: parsed.footprintRange || '10 - 25 tCO2e/yr',
+				explanation: parsed.explanation || 'Estimated via AI sector analysis.',
+				source: 'tencent/hy3:free (OpenRouter)',
+			};
+		} catch {
+			return legacyEstimate(body);
+		}
+	} catch {
+		return legacyEstimate(body);
+	}
+}
+
+function legacyEstimate(body: any): any {
+	const industry = (body.industry || '').toLowerCase();
+	let rating = 'B', footprintRange = '10 - 25 tCO2e/yr';
+	let explanation = 'Assigned moderate baseline average. Industry profile indicates office operations grids and low directly owned combustion fleets.';
+	if (industry.includes('tech') || industry.includes('saas') || industry.includes('professional')) {
+		rating = 'A-'; footprintRange = '8 - 20 tCO2e/yr';
+		explanation = 'Evaluated as low directly combusted fuel profile. Major footprint lies in remote-first digital server operations, Scope 2 digital workspaces, and value chain SaaS tools.';
+	} else if (industry.includes('logistics') || industry.includes('freight')) {
+		rating = 'D'; footprintRange = '500 - 1500 tCO2e/yr';
+		explanation = 'Categorized as heavy energy-intensive operations. Large fleet transport requirements, diesel combustion profiles, and Scope 3 supplier logistics trigger low-efficiency footprint indicators.';
+	} else if (industry.includes('manufacturing') || industry.includes('apparel')) {
+		rating = 'C-'; footprintRange = '250 - 750 tCO2e/yr';
+		explanation = 'Evaluated with substantial process heating obligations. Steam purchases (Scope 2) and industrial electricity dependencies create localized carbon-intensive zones requiring heavy abatement.';
+	} else if (industry.includes('food') || industry.includes('hospitality')) {
+		rating = 'C+'; footprintRange = '45 - 120 tCO2e/yr';
+		explanation = 'Significant Scope 1 fugitive air conditioning refrigerant pressures and food supply chain logistics (Scope 3) characterize hospitality profiles.';
+	}
+	return { rating, footprintRange, explanation, source: 'Hedjo Local Sector Fallback' };
+}
 
 async function handleApi(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
@@ -353,14 +447,8 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 	// Legacy endpoints (for compatibility)
 	if (path === '/api/analysis/estimate-rating' && method === 'POST') {
 		const body = await request.json<any>();
-		const industry = (body.industry || '').toLowerCase();
-		let rating = 'B', footprintRange = '10 - 25 tCO2e/yr';
-		let explanation = 'Assigned moderate baseline average.';
-		if (industry.includes('tech') || industry.includes('saas')) { rating = 'A-'; footprintRange = '8 - 20 tCO2e/yr'; }
-		else if (industry.includes('logistics') || industry.includes('freight')) { rating = 'D'; footprintRange = '500 - 1500 tCO2e/yr'; }
-		else if (industry.includes('manufacturing')) { rating = 'C-'; footprintRange = '250 - 750 tCO2e/yr'; }
-		else if (industry.includes('food') || industry.includes('hospitality')) { rating = 'C+'; footprintRange = '45 - 120 tCO2e/yr'; }
-		return new Response(JSON.stringify({ rating, footprintRange, explanation, source: 'Hedjo Edge' }), {
+		const result = await generateEstimate(body, env);
+		return new Response(JSON.stringify(result), {
 			headers: { 'content-type': 'application/json' },
 		});
 	}
