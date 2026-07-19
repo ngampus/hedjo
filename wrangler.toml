@@ -10,3 +10,7 @@ route = { pattern = "hedjo.letssee.my.id/*", zone_name = "letssee.my.id" }
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+# OpenRouter AI config (API key stored as Worker secret)
+[vars]
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
