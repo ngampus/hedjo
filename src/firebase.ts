@@ -9,9 +9,9 @@ import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
 // Detect if the firebase-applet-config is still set to placeholder values
-export const isLocalStorageFallback = !firebaseConfig.apiKey || 
-  firebaseConfig.apiKey.includes('place_your_') || 
-  firebaseConfig.apiKey === '';
+// On Cloudflare Workers edge, we force LocalStorage fallback mode to avoid
+// Firebase domain authorization errors (original config is bound to Cloud Run URL).
+export const isLocalStorageFallback = true;
 
 let app;
 let dbInstance: any = null;
