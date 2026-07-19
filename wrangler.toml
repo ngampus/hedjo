@@ -1,0 +1,12 @@
+name = "hedjo"
+main = "worker.ts"
+compatibility_date = "2026-07-18"
+
+workers_dev = false
+route = { pattern = "hedjo.letssee.my.id/*", zone_name = "letssee.my.id" }
+
+# Cloudflare Assets binding — serves static SPA from dist/
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
