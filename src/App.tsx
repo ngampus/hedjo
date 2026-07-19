@@ -89,7 +89,10 @@ export default function App() {
   }, []);
 
   // Load session from localStorage on mount & synchronize from cloud
+  // In D1 mode, session is restored via /api/auth/me (cookie-based) above.
   useEffect(() => {
+    if (isD1Mode) return;
+
     const cachedUser = localStorage.getItem('hedjo_session_user');
     const cachedOrg = localStorage.getItem('hedjo_session_org');
     const cachedPeriod = localStorage.getItem('hedjo_session_period');

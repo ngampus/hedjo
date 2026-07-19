@@ -219,7 +219,21 @@ async function getOrgs(request: Request, env: Env, userId: string): Promise<Resp
 	const orgs = await env.DB!.prepare(
 		'SELECT o.* FROM organizations o JOIN memberships m ON o.id = m.org_id WHERE m.user_id = ?',
 	).bind(userId).all();
-	return new Response(JSON.stringify(orgs.results), { headers: { 'content-type': 'application/json' } });
+	const mapped = orgs.results.map((o: any) => ({
+		id: o.id,
+		name: o.name,
+		country: o.country,
+		industry: o.industry,
+		baseCurrency: o.base_currency,
+		baselineYear: o.baseline_year,
+		ownerUserId: o.owner_user_id,
+		websiteUrl: o.website_url,
+		estimatedRating: o.estimated_rating,
+		estimatedFootprintRange: o.estimated_footprint_range,
+		estimationReason: o.estimation_reason,
+		createdAt: o.created_at,
+	}));
+	return new Response(JSON.stringify(mapped), { headers: { 'content-type': 'application/json' } });
 }
 
 async function createOrg(request: Request, env: Env, userId: string): Promise<Response> {
@@ -244,7 +258,15 @@ async function createOrg(request: Request, env: Env, userId: string): Promise<Re
 
 async function getPeriods(request: Request, env: Env, orgId: string): Promise<Response> {
 	const periods = await env.DB!.prepare('SELECT * FROM reporting_periods WHERE org_id = ?').bind(orgId).all();
-	return new Response(JSON.stringify(periods.results), { headers: { 'content-type': 'application/json' } });
+	const mapped = periods.results.map((p: any) => ({
+		id: p.id,
+		orgId: p.org_id,
+		year: p.year,
+		status: p.status,
+		createdAt: p.created_at,
+		lockedAt: p.locked_at,
+	}));
+	return new Response(JSON.stringify(mapped), { headers: { 'content-type': 'application/json' } });
 }
 
 async function createPeriod(request: Request, env: Env, orgId: string): Promise<Response> {
@@ -261,7 +283,23 @@ async function createPeriod(request: Request, env: Env, orgId: string): Promise<
 
 async function getActivities(request: Request, env: Env, periodId: string): Promise<Response> {
 	const acts = await env.DB!.prepare('SELECT * FROM activities WHERE reporting_period_id = ?').bind(periodId).all();
-	return new Response(JSON.stringify(acts.results), { headers: { 'content-type': 'application/json' } });
+	const mapped = acts.results.map((a: any) => ({
+		id: a.id,
+		orgId: a.org_id,
+		reportingPeriodId: a.reporting_period_id,
+		scope: a.scope,
+		categoryId: a.category_id,
+		location: a.location,
+		activityAmount: a.activity_amount,
+		activityUnit: a.activity_unit,
+		emissionFactorId: a.emission_factor_id,
+		calculatedCO2e: a.calculated_co2e,
+		notes: a.notes,
+		createdBy: a.created_by,
+		createdAt: a.created_at,
+		date: a.date,
+	}));
+	return new Response(JSON.stringify(mapped), { headers: { 'content-type': 'application/json' } });
 }
 
 async function createActivity(request: Request, env: Env): Promise<Response> {
@@ -283,7 +321,15 @@ async function createActivity(request: Request, env: Env): Promise<Response> {
 
 async function getInsights(request: Request, env: Env, periodId: string): Promise<Response> {
 	const insights = await env.DB!.prepare('SELECT * FROM insights WHERE reporting_period_id = ?').bind(periodId).all();
-	return new Response(JSON.stringify(insights.results), { headers: { 'content-type': 'application/json' } });
+	const mapped = insights.results.map((i: any) => ({
+		id: i.id,
+		orgId: i.org_id,
+		reportingPeriodId: i.reporting_period_id,
+		summaryText: i.summary_text,
+		createdAt: i.created_at,
+		modelName: i.model_name,
+	}));
+	return new Response(JSON.stringify(mapped), { headers: { 'content-type': 'application/json' } });
 }
 
 async function createInsight(request: Request, env: Env): Promise<Response> {
